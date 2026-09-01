@@ -1,0 +1,58 @@
+name: Docker Kernel Config Check
+
+on:
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout kernel
+        uses: actions/checkout@v4
+
+      - name: Install tools
+        run: |
+          sudo apt update
+          sudo apt install -y \
+            build-essential \
+            gcc-aarch64-linux-gnu \
+            bc bison flex \
+            libssl-dev libelf-dev \
+            curl
+
+      - name: Generate rosemary config
+        run: |
+          mkdir -p out
+
+          make O=out \
+            ARCH=arm64 \
+            CROSS_COMPILE=aarch64-linux-gnu- \
+            rosemary_defconfig
+
+      - name: Enable Docker requirements
+        run: |
+          ./scripts/config --file out/.config \
+            --enable SYSVIPC \
+            --enable POSIX_MQUEUE \
+            --enable IPC_NS \
+            --enable CGROUP_PIDS \
+            --enable CGROUP_DEVICE
+
+          make O=out \
+            ARCH=arm64 \
+            CROSS_COMPILE=aarch64-linux-gnu- \
+            olddefconfig
+
+      - name: Show critical config
+        run: |
+          grep -E 'CONFIG_(SYSVIPC|POSIX_MQUEUE|IPC_NS|CGROUP_PIDS|CGROUP_DEVICE)=' out/.config || true
+
+      - name: Docker check-config
+        run: |
+          curl -fsSL \
+            https://raw.githubusercontent.com/moby/moby/master/contrib/check-config.sh \
+            -o check-config.sh
+
+          chmod +x check-config.sh
+          ./check-config.sh out/.config || true
