@@ -37,7 +37,12 @@ jobs:
             --enable POSIX_MQUEUE \
             --enable IPC_NS \
             --enable CGROUP_PIDS \
-            --enable CGROUP_DEVICE
+            --enable CGROUP_DEVICE \
+            --enable IP6_NF_NAT \
+            --enable IP6_NF_TARGET_MASQUERADE \
+            --enable NETFILTER_XT_MATCH_ADDRTYPE \
+            --enable IP_VS \
+            --enable NETFILTER_XT_MATCH_IPVS
 
           make O=out \
             ARCH=arm64 \
@@ -46,7 +51,7 @@ jobs:
 
       - name: Show critical config
         run: |
-          grep -E 'CONFIG_(SYSVIPC|POSIX_MQUEUE|IPC_NS|CGROUP_PIDS|CGROUP_DEVICE)=' out/.config || true
+          grep -E 'CONFIG_(SYSVIPC|POSIX_MQUEUE|IPC_NS|CGROUP_PIDS|CGROUP_DEVICE|IP6_NF_NAT|IP6_NF_TARGET_MASQUERADE|NETFILTER_XT_MATCH_ADDRTYPE|IP_VS|NETFILTER_XT_MATCH_IPVS)=' out/.config || true
 
       - name: Docker check-config
         run: |
@@ -55,4 +60,4 @@ jobs:
             -o check-config.sh
 
           chmod +x check-config.sh
-          ./check-config.sh out/.config || true
+          ./check-config.sh out/.config 
