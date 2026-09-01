@@ -1,0 +1,86 @@
+name: Build Rosemary Docker Kernel
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout kernel
+        uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          sudo apt update
+          sudo apt install -y \
+            build-essential \
+            gcc-aarch64-linux-gnu \
+            gcc-arm-linux-gnueabi \
+            bc bison flex \
+            libssl-dev libelf-dev \
+            python3 curl
+
+      - name: Download Android Clang r383902
+        run: |
+          mkdir -p clang
+
+          curl -L \
+            "https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/tags/android-11.0.0_r28/clang-r383902.tar.gz" \
+            -o clang.tar.gz
+
+          tar -xzf clang.tar.gz -C clang
+
+          echo "$GITHUB_WORKSPACE/clang/bin" >> "$GITHUB_PATH"
+          echo "LD_LIBRARY_PATH=$GITHUB_WORKSPACE/clang/lib64" >> "$GITHUB_ENV"
+
+      - name: Generate rosemary config
+        run: |
+          mkdir -p out
+
+          make O=out \
+            ARCH=arm64 \
+            CC=clang \
+            LD=ld.lld \
+            AR=llvm-ar \
+            NM=llvm-nm \
+            OBJCOPY=llvm-objcopy \
+            OBJDUMP=llvm-objdump \
+            STRIP=llvm-strip \
+            LLVM=1 \
+            LLVM_IAS=1 \
+            CROSS_COMPILE=aarch64-linux-gnu- \
+            CROSS_COMPILE_COMPAT=arm-linux-gnueabi- \
+            rosemary_defconfig
+
+      - name: Build kernel
+        run: |
+          make -j"$(nproc)" O=out \
+            ARCH=arm64 \
+            CC=clang \
+            LD=ld.lld \
+            AR=llvm-ar \
+            NM=llvm-nm \
+            OBJCOPY=llvm-objcopy \
+            OBJDUMP=llvm-objdump \
+            STRIP=llvm-strip \
+            LLVM=1 \
+            LLVM_IAS=1 \
+            CROSS_COMPILE=aarch64-linux-gnu- \
+            CROSS_COMPILE_COMPAT=arm-linux-gnueabi-
+
+      - name: Verify output
+        run: |
+          test -f out/arch/arm64/boot/Image.gz
+          ls -lh out/arch/arm64/boot/Image.gz
+          grep -E 'CONFIG_(SYSVIPC|IPC_NS|CGROUP_PIDS|CGROUP_DEVICE)=' out/.config
+
+      - name: Upload kernel artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: rosemary-docker-kernel
+          path: |
+            out/arch/arm64/boot/Image.gz
+            out/.config
+            out/System.map
